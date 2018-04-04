@@ -1,0 +1,11 @@
+*.csv
+*.pyc
+*~
+*.tfrecords
+*.pkl
+YouTube8M
+MNIST
+CIFAR
+BSDS300
+GSMfinaldata
+HumanActionVids
