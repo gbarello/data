@@ -1,5 +1,5 @@
 import numpy as np
-import imageio
+#import imageio
 import glob
 import pickle
 import tensorflow as tf
@@ -24,12 +24,12 @@ def import_data(data_type):
         exit()
 
 def save_metadata(direc,data):
-      F = open(direc + "metadata.pkl","w")
+      F = open(direc + "metadata.pkl","wb")
       pickle.dump(data,F)
       F.close()
 
 def load_metadata(direc):
-      F = open(direc + "metadata.pkl","r")
+      F = open(direc + "metadata.pkl","rb")
       out = pickle.load(F)
       F.close()
       return out
