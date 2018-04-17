@@ -1,5 +1,5 @@
 import numpy as np
-import imageio
+#import imageio
 import glob
 import pickle
 import tensorflow as tf
