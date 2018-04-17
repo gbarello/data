@@ -24,12 +24,12 @@ def import_data(data_type):
         exit()
 
 def save_metadata(direc,data):
-      F = open(direc + "metadata.pkl","w")
+      F = open(direc + "metadata.pkl","wb")
       pickle.dump(data,F)
       F.close()
 
 def load_metadata(direc):
-      F = open(direc + "metadata.pkl","r")
+      F = open(direc + "metadata.pkl","rb")
       out = pickle.load(F)
       F.close()
       return out
@@ -220,16 +220,19 @@ def get_from_tf_file(name,dtag,meta,epochs):
             
       return image, label
       
-def get_data(data_type,mode,epochs = None):
+def get_data(data_type,mode,epochs = None,expand = False):
       print("/home/gbarello/data/datasets/"+data_type)
       if os.path.exists("/home/gbarello/data/datasets/"+data_type) == False:
             tr,te,va = import_data(data_type)
             save_data(data_type,tr,te,va)
             
       img,lab = open_data(data_type,mode,epochs = epochs)        
-            
-      return img,lab
-        
+
+      if expand:
+            return tf.expand_dims(img,-1),lab
+      else:
+            return img,lab
+
 if __name__ == "__main__":
 
       config = tf.ConfigProto(device_count = {'GPU': 0})

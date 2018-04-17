@@ -120,6 +120,6 @@ def make_random_video(nshapes,fsize,vlen):
     return out[0],out[1],out[3],OS
 
 if __name__ == "__main__":
-    A = make_random_video(5,30,100)
+    A = make_random_video(2,30,100)
 
     np.savetxt("./test_video.csv",np.reshape(A[0],[100,-1]))
