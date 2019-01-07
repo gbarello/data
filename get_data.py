@@ -5,6 +5,10 @@ import pickle
 import tensorflow as tf
 import os
 import sys
+import sys
+sys.path.append('~/my_modules')
+import utilities as utils
+import image_processing as proc
 
 def _int64_feature(value):
       return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
@@ -17,11 +21,63 @@ def import_data(data_type):
         return import_HAV_data(data_type)
     if data_type == "two_moving_shapes":
         return make_TMS_data(data_type)
+    if data_type == "three_moving_shapes":
+        return make_TMS_data(data_type,n_shape = 3)
+    if data_type == "one_moving_shapes":
+        return make_TMS_data(data_type,n_shape = 1)
     if data_type == "N_moving_shapes":
-        return make_NMS_data(data_type)
+          return make_NMS_data(data_type)
+    if data_type == "N_moving_circle":
+          return make_NMS_data(data_type,shapes = ["circle"])
+    if data_type == "nascar":
+          return make_nascar_data(data_type)
+    if data_type == "switching_nascar":
+          return make_switching_nascar_data(data_type)
+
     else:
         print("data type not recognized")
         exit()
+
+def IQR(dist):
+      return np.percentile(dist, 75) - np.percentile(dist, 25)
+
+
+def get_GSM_data(param):
+      nang = param["nori"]
+      scale = param["scale"]
+      fdist = param["fdist"]
+      
+      fname = "GSM_{}_{}_{}".format(scale,nang,fdist)
+      
+      imlist = glob.glob("/home/gbarello/data/BSDS300/images/*.jpg")
+      
+      Clist = []
+      
+      try:
+            FF = utils.load_file("/home/gbarello/data/datasets/GSM_filters/" + fname)
+            LOG.log("Using pre-saved filters")
+            
+      except:
+            LOG.log("Measuring Filters")
+            for i in imlist:
+                  Clist.append(proc.get_phased_filter_samples(i,nang,scale,fdist))
+                  LOG.log(i + "\t{}".format(len(Clist[-1])))
+                  
+            utils.dump_file(Clist,"/home/gbarello/data/datasets/GSM_filters/" + fname)
+            
+            #we want to sample from each image equally, so we find the list with the fewest entries
+      mlen = min([len(c) for c in Clist])
+      #randomise the list and cocnatenate them all into one list
+      Clist = np.array([c[np.random.choice(range(len(c)),mlen)] for c in Clist])
+      Clist = np.array([k for c in Clist for k in c])
+      
+      fac = np.array([IQR(Clist[:,:,:,0]),IQR(Clist[:,:,:,1])])
+      
+      Clist = Clist / np.array([[fac]])
+      
+      np.random.shuffle(Clist)
+
+      return Clist,fac
 
 def save_metadata(direc,data):
       F = open(direc + "metadata.pkl","wb")
@@ -34,7 +90,7 @@ def load_metadata(direc):
       F.close()
       return out
 
-def import_HAV_data(data_type,v_len = 20): 
+def import_HAV_data(data_type,v_len = 40): 
       files = glob.glob("/home/gbarello/data/HumanActionVids/videos/*")
       
       people = ["0" + str(k) for k in range(1,10)] + ["1" + str(k) for k in range(10)] + ["2" + str(k) for k in range(6)]
@@ -89,49 +145,98 @@ def import_HAV_data(data_type,v_len = 20):
       
       return [train,trlab],[test,telab],[val,valab]
 
-def make_TMS_data(data_type,v_len = 100): 
+
+def pad_to_len(x,nval,axis = 0):
+      xs = x.shape
+      if xs[0] == nval:
+            return x
+
+      pad = -np.ones(list(xs[:axis]) + [nval - xs[axis]] + list(xs[axis + 1:]))
+      return np.concatenate([x,pad],axis = axis)
+      
+def make_TMS_data(data_type,n_shape = 2,v_len = 100): 
       from MovingShapes import moving_shape_generators as gen
 
       shapes = ["square","triangle"]
       fsize = 30
 
       print("get training data")
-      train = [gen.make_random_video(2,fsize,v_len) for k in range(1000)]
+      train = [gen.make_random_video(n_shape,fsize,v_len) for k in range(1000)]
       trdat = np.array([k[0] for k in train],np.float32)
       trlabel = np.array([[np.append(i,np.append(k[2],k[3])) for i in k[1]] for k in train],np.float32)
 
+
       print("get test data")
-      test = [gen.make_random_video(2,fsize,v_len) for k in range(100)]
+      test = [gen.make_random_video(n_shape,fsize,v_len) for k in range(100)]
       tedat = np.array([k[0] for k in test],np.float32)
       telabel = np.array([[np.append(i,np.append(k[2],k[3])) for i in k[1]] for k in test],np.float32)
 
       print("get val data")
-      val = [gen.make_random_video(2,fsize,v_len) for k in range(100)]
+      val = [gen.make_random_video(n_shape,fsize,v_len) for k in range(100)]
       vadat = np.array([k[0] for k in val],np.float32)
       valabel = np.array([[np.append(i,np.append(k[2],k[3])) for i in k[1]] for k in val],np.float32)
       
       return [trdat,trlabel],[tedat,telabel],[vadat,valabel]
 
-def make_NMS_data(data_type,v_len = 100,nmax = 3,fsize = 30): 
+def make_NMS_data(data_type,v_len = 100,nmax = 3,fsize = 30,shapes = ["triangle","square"]): 
       from MovingShapes import moving_shape_generators as gen
 
-      shapes = ["square","triangle"]
+      print("get training data")      
+      train = [gen.make_random_video(np.random.randint(1,nmax+1),fsize,v_len,shapes = shapes) for k in range(1000)]
+      trdat = np.array([k[0] for k in train],np.float32)
+      trlabel = np.array([[np.append(np.reshape(pad_to_len(i,nmax,1),[-1]),np.append(pad_to_len(k[2],nmax),pad_to_len(k[3],nmax))) for i in k[1]] for k in train],np.float32)
+
+      print("get test data")
+      test = [gen.make_random_video(np.random.randint(1,nmax+1),fsize,v_len,shapes = shapes) for k in range(100)]
+      tedat = np.array([k[0] for k in test],np.float32)
+      telabel = np.array([[np.append(np.reshape(pad_to_len(i,nmax,1),[-1]),np.append(pad_to_len(k[2],nmax),pad_to_len(k[3],nmax))) for i in k[1]] for k in test],np.float32)
+
+      print("get val data")
+      val = [gen.make_random_video(np.random.randint(1,nmax+1),fsize,v_len,shapes = shapes) for k in range(100)]
+      vadat = np.array([k[0] for k in val],np.float32)
+      valabel = np.array([[np.append(np.reshape(pad_to_len(i,nmax,1),[-1]),np.append(pad_to_len(k[2],nmax),pad_to_len(k[3],nmax))) for i in k[1]] for k in val],np.float32)
+      
+      return [trdat,trlabel],[tedat,telabel],[vadat,valabel]
+
+def make_nascar_data(data_type,v_len = 10,dt=.1): 
+      from Nascar import nascar_generator as gen
 
       print("get training data")
       
-      train = [gen.make_random_video(nmax,fsize,v_len) for k in range(1000)]      
+      train = [gen.make_random_video(v_len,dt) for k in range(100)]      
       trdat = np.array([k[0] for k in train],np.float32)
-      trlabel = np.array([[np.append(np.reshape(i,[-1]),np.append(k[2],k[3])) for i in k[1]] for k in train],np.float32)
+      trlabel = np.array([k[1] for k in train],np.float32)
 
       print("get test data")
-      test = [gen.make_random_video(nmax,fsize,v_len) for k in range(100)]
+      test = [gen.make_random_video(v_len,dt) for k in range(1000)]      
       tedat = np.array([k[0] for k in test],np.float32)
-      telabel = np.array([[np.append(np.reshape(i,[-1]),np.append(k[2],k[3])) for i in k[1]] for k in test],np.float32)
+      telabel = np.array([k[1] for k in test],np.float32)
 
       print("get val data")
-      val = [gen.make_random_video(nmax,fsize,v_len) for k in range(100)]
-      vadat = np.array([k[0] for k in val],np.float32)
-      valabel = np.array([[np.append(np.reshape(i,[-1]),np.append(k[2],k[3])) for i in k[1]] for k in val],np.float32)
+      var = [gen.make_random_video(v_len,dt) for k in range(1000)]      
+      vadat = np.array([k[0] for k in var],np.float32)
+      valabel = np.array([k[1] for k in var],np.float32)
+      
+      return [trdat,trlabel],[tedat,telabel],[vadat,valabel]
+
+def make_switching_nascar_data(data_type,v_len = 10,dt=.1): 
+      from Nascar import nascar_generator as gen
+
+      print("get training data")
+      
+      train = [gen.make_random_video(v_len,dt,switch_states = True) for k in range(100)]      
+      trdat = np.array([k[0] for k in train],np.float32)
+      trlabel = np.array([k[1] for k in train],np.float32)
+
+      print("get test data")
+      test = [gen.make_random_video(v_len,dt,switch_states = True) for k in range(1000)]      
+      tedat = np.array([k[0] for k in test],np.float32)
+      telabel = np.array([k[1] for k in test],np.float32)
+
+      print("get val data")
+      var = [gen.make_random_video(v_len,dt,switch_states = True) for k in range(1000)]      
+      vadat = np.array([k[0] for k in var],np.float32)
+      valabel = np.array([k[1] for k in var],np.float32)
       
       return [trdat,trlabel],[tedat,telabel],[vadat,valabel]
 

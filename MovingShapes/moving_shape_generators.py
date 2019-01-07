@@ -18,11 +18,26 @@ def square_in(size,pos):
     else:
         return False
     
+def circle_in(size,pos):
+
+    cen = np.array([float(size-1)/2,float(size-1)/2])
+    
+    if pos[0] < 0 or pos[1] < 0:
+        return False
+    
+    if np.linalg.norm(np.array(pos) - cen) < float(size)/2:
+        return True
+    
+    else:
+        return False
+    
 def shape_in(shape,size,pos):
     if shape == "triangle":
         return triangle_in(size,pos)
     elif shape == "square":
         return square_in(size,pos)
+    elif shape == "circle":
+        return circle_in(size,pos)
     else:
         print("shape not recognized")
         exit()
@@ -34,7 +49,7 @@ def paint_shape(frame,shape,size,pos):
     for i in np.arange(np.floor(size)):
         for j in np.arange(np.floor(size)):
             if shape_in(shape,size,[i,j]):
-                frame[int(x+i),int(y+j)] = 1
+                frame[int(np.floor(x+i)),int(np.floor(y+j))] = 1
 
     return frame
 
@@ -105,19 +120,47 @@ def make_video(shapes,pinit,sinit,ssize,fsize,time):
 
     return video,varibs,shapes,ssize
 
-def make_random_video(nshapes,fsize,vlen):
-    shapes = np.random.choice(["triangle","square"],[nshapes],replace = True)
-    sizes = np.random.uniform(2,10,[nshapes])
+def paint_video(labels,fsize,nshape = 2,nstot = 2):
+    
+    video = []
+    varibs = []
+   
+    sname = ["triangle","square","circle"]
+
+    ppos = np.arange(nshape*2)
+    spos = ppos[:nshape] + nstot * 5
+    
+    pos = np.copy(labels[:,ppos])
+    pos = np.reshape(pos,[-1,nshape,2])
+    shapes = [sname[int(k)] for k in labels[0,spos]]
+    print(shapes)
+    ssize = labels[0,spos - nstot]
+    
+    for k in range(len(labels)):
+        temp = np.zeros([fsize,fsize])
+        
+        temp = paint_shapes(temp,shapes,ssize,pos[k])
+        video.append(np.copy(temp))
+
+    video = np.array(video)
+
+    varibs = np.array(varibs)
+
+    return video
+
+def make_random_video(nshapes,fsize,vlen,size = [2,10],vmax = 3,shapes = ["triangle","square"]):
+    shapes = np.random.choice(shapes,[nshapes],replace = True)
+    sizes = np.random.uniform(size[0],size[1],[nshapes])
     ipos = [np.random.uniform(0,fsize - k,[2]) for k in sizes]
-    ivel = np.random.uniform(-3,3,[nshapes,2])
+    ivel = np.random.uniform(-vmax,vmax,[nshapes,2])
 
     out =  make_video(shapes,ipos,ivel,sizes,fsize,vlen)
 
-    ddic = {"triangle":0,"square":1}
+    ddic = {"triangle":0,"square":1,"circle":2}
 
     OS = np.array([ddic[k] for k in out[2]])
-
-    return out[0],out[1],out[3],OS
+    
+    return np.array(out[0]),np.array(out[1]),np.array(out[3]),OS
 
 if __name__ == "__main__":
     A = make_random_video(2,30,100)
